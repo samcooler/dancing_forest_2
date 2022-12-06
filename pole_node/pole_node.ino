@@ -6,6 +6,8 @@ This example may be copied under the terms of the MIT license, see the LICENSE f
 #include <ArtnetWifi.h>
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
+#include "Adafruit_VL53L0X.h"
+#include <WiFi.h>
 
 //Wifi settings
 const char* ssid = "Athenaeum Residents";
@@ -17,12 +19,16 @@ const int numberOfChannels = numLeds * 3; // Total number of channels you want t
 const byte dataPin = 0;
 Adafruit_NeoPixel leds = Adafruit_NeoPixel(numLeds, dataPin, NEO_GRB + NEO_KHZ800);
 
-// Artnet settings
-ArtnetWifi artnet_rx;
-//ArtnetWifi artnet_tx;
+// sensor settings
+const int num_sensors = 6;
+const int pin_address = 1;
+int node_address = 0;
+Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 
-const int startUniverse = 0; // CHANGE FOR YOUR SETUP most software this is 1, some software send out artnet first universe as 0.
-const char host[] = "10.0.0.213"; // CHANGE FOR YOUR SETUP your destination
+// Artnet settings
+ArtnetWifi artnet;
+const int startUniverse = 0;
+const char host[] = "10.0.0.54";
 
 
 // Check if we got all universes
@@ -69,15 +75,15 @@ bool ConnectWifi(void)
 void initTest()
 {
   for (int i = 0 ; i < numLeds ; i++)
-    leds.setPixelColor(i, 127, 0, 0);
+    leds.setPixelColor(i, 30, 0, 0);
   leds.show();
   delay(100);
   for (int i = 0 ; i < numLeds ; i++)
-    leds.setPixelColor(i, 0, 127, 0);
+    leds.setPixelColor(i, 0, 30, 0);
   leds.show();
   delay(100);
   for (int i = 0 ; i < numLeds ; i++)
-    leds.setPixelColor(i, 0, 0, 127);
+    leds.setPixelColor(i, 0, 0, 30);
   leds.show();
   delay(100);
   for (int i = 0 ; i < numLeds ; i++)
@@ -88,7 +94,6 @@ void initTest()
 void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* data)
 {
   Serial.print("frame");
-  Serial.print
   sendFrame = 1;
   // set brightness of the whole strip 
   if (universe == 15)
@@ -131,8 +136,24 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
 void setup()
 {
   Serial.begin(115200);
+
+  // which node am I?
+  pinMode(pin_address, INPUT);
+  node_address = digitalRead(pin_address);
+  Serial.print("Node address: ");
+  Serial.println(node_address);
+
+  // setup sensors
+  Wire.begin(2, 3);
+  Serial.println("Adafruit VL53L0X test");
+  if (!lox.begin()) {
+    Serial.println(F("Failed to boot VL53L0X"));
+    while(1);
+  }
+
+
   ConnectWifi();
-  artnet_rx.begin();
+  artnet.begin(host);
   
 //  artnet_tx.begin(host);
 //  artnet_tx.setLength(numLeds * 3);
@@ -142,26 +163,36 @@ void setup()
   initTest();
 
   // this will be called for each packet received
-  artnet_rx.setArtDmxCallback(onDmxFrame);
+  artnet.setArtDmxCallback(onDmxFrame);
 }
 
 void loop()
 {
-  // we call the read function inside the loop
-  artnet_rx.read();
+  // Receive
+  artnet.read();
 
-//  uint8_t i;
-//  uint8_t j;
-//  
-//  // set the first 3 byte to all the same value. A RGB lamp will show a ramp-up white.
-//  for (j = 0; j < 255; j++) {
-//    for (i = 0; i < 3; i++) {
-//      artnet_tx.setByte(i, j);
-//    }
-//    // send out the Art-Net DMX data
-//    artnet_tx.write();
-//    delay(1000);
-//  }
+
+  // Transmit
+  artnet.setLength(num_sensors + 1);  
+  VL53L0X_RangingMeasurementData_t measure;
+  lox.rangingTest(&measure, false); // pass in 'true' to get debug data printout!
+
+  int data;  
+  artnet.setByte(0, node_address);
+
+  for (uint8_t sensor = 0; sensor < num_sensors; sensor++) {
+    if (sensor == 0) {
+      if (measure.RangeStatus != 4) {  // phase failures have incorrect data
+        data = measure.RangeMilliMeter;
+      } else {
+        data = 0;
+      }
+    } else {
+      data = sensor;
+    }
+      artnet.setByte(sensor + 1, data);
+  }
+  artnet.write();
 
 //  Serial.println("read");
 }
