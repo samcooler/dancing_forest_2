@@ -14,11 +14,10 @@
 // general setup
 uint32_t loop_count = 0;
 
-
-
 // power setup
 float power_current = 0;
 float power_battery = 0;
+const float battery_voltage_threshold = 3.3;
 
 // lidar setup
 #define use_lidar 0
@@ -39,11 +38,18 @@ int16_t distance[3];
 #define strip_rgb_inner 2
 #define strip_rgb_outer 3
 #define strip_rgb_upper 4
+#define strip_rgb_lower 5
 
 Adafruit_NeoPixel leds_rgb(led_count_rgb, 9, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel leds_side(led_count_side, 8, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel leds_rgbw(led_count_rgbw, 7, NEO_GRBW + NEO_KHZ800);
 int sleep_luminance = 0;
+const int sleep_start = 6000;
+const int sleep_fully = 20000;
+float sleep_oscillation_period = 1000;
+const float sleep_luminance_baseline = 100;
+const float sleep_oscillation_magnitude = 30;
+const int sensor_threshold = 10;
 
 // accel setup
 float ax, ay, az, gx, gy, gz;
@@ -59,35 +65,38 @@ float buffer_sum_ay = 0;
 int sample_count = 0;
 
 void setup() {
+  randomSeed(analogRead(PIN_battery_measure));
+
   Serial.begin(115200);
   while (!Serial) delay(10);
   delay(1000);
   Serial.println(F("Dancing Forest"));
 
-  // enable LED power
-  pinMode(PIN_led_enable, OUTPUT);
-  digitalWrite(PIN_led_enable, HIGH);
-
-  // LED start
-  leds_rgb.begin();   // INITIALIZE NeoPixel strip object (REQUIRED)
-  leds_rgb.show();    // Turn OFF all pixels ASAP
-  leds_side.begin();  // INITIALIZE NeoPixel strip object (REQUIRED)
-  leds_side.show();   // Turn OFF all pixels ASAP
-  leds_rgbw.begin();  // INITIALIZE NeoPixel strip object (REQUIRED)
-  leds_rgbw.show();   // Turn OFF all pixels ASAP
-
   // I2C start
   Wire.begin(12, 11);
   Serial.println(F("Wire is started"));
-
+  delay(500);
+  
   // accel start
-  if (!IMU.begin()) {
+  while (!IMU.begin()) {
     Serial.println("Failed to initialize IMU!");
-    while (1)
-      ;
+    delay(500);
   }
   Serial.println(F("Accelerometer is started"));
   last_motion_time = millis();
+
+  // LED start
+  sleep_oscillation_period += random(2000);
+  leds_rgb.begin();
+  leds_rgb.show(); 
+  leds_side.begin();
+  leds_side.show();
+  leds_rgbw.begin();
+  leds_rgbw.show();
+  // enable LED power
+  pinMode(PIN_led_enable, OUTPUT);
+  digitalWrite(PIN_led_enable, HIGH);  
+
 
   // lidar start
   if (use_lidar) {
@@ -130,12 +139,12 @@ void setup() {
 
 void read_power() {
   power_current = analogRead(PIN_current_measure);
-  power_battery = analogRead(PIN_battery_measure);
+  power_battery = analogRead(PIN_battery_measure) * 0.001611;
 
-  Serial.println(F("Power: current measurement"));
-  Serial.println(power_current, 4);
-  Serial.println(F("Power: battery measurement"));
-  Serial.println(power_battery, 4);
+  Serial.print(F("I: "));
+  Serial.println(power_current, 2);
+  Serial.print(F("V: "));
+  Serial.println(power_battery, 2);
 }
 
 void read_sensors() {
@@ -145,7 +154,7 @@ void read_sensors() {
     IMU.readGyroscope(gx, gy, gz);
     // temperature = accel.readTempF();
 
-    if (abs(gx) + abs(gy) > 5) {
+    if (abs(gx) + abs(gy) > sensor_threshold) {
       last_motion_time = millis();
     }
   }
@@ -259,16 +268,11 @@ float calculate_smoothed_mean(float new_value, float buffer[], int &buffer_index
 
 void sleep_colors() {
   uint32_t now = millis();
-  const int sleep_start = 6000;
-  const int sleep_fully = 12000;
-  const float sleep_oscillation_period = 1000;
-  const float sleep_luminance_baseline = 40;
-  const float sleep_oscillation_magnitude = 30;
+
   float time_since_motion = now - last_motion_time;
   if (time_since_motion > sleep_fully) {
     // sleep mode
     sleep_luminance = int(sin((time_since_motion - sleep_fully) / sleep_oscillation_period) * sleep_oscillation_magnitude + sleep_luminance_baseline);
-
   } else if (time_since_motion > sleep_start and time_since_motion <= sleep_fully) {
     // fade into sleep over 4 seconds, after 1 second of inactivity
     sleep_luminance = int((time_since_motion - sleep_start) * sleep_luminance_baseline / (sleep_fully - sleep_start));
@@ -278,12 +282,22 @@ void sleep_colors() {
     if(loop_count % 3 == 0) {
       sleep_luminance -= 1;
     }
+  } else {
+    sleep_luminance = 0;
   }
-  Serial.println(sleep_luminance);
+  // Serial.println(sleep_luminance);
   for (int i = 0; i < led_count_rgbw; i++) {
-    leds_rgbw.setPixelColor(i, 0, 0, 0, sleep_luminance);
+    leds_rgbw.setPixelColor(i,leds_rgbw.gamma32(leds_rgbw.Color(0,0,0,sleep_luminance)));
   }
   leds_rgbw.show();
+}
+
+int which_rgb_strip(int i) {
+  if (i < 5 or i > 52) {
+    return strip_rgb_upper;
+  } else {
+    return strip_rgb_lower;
+  }
 }
 
 void tilt_colors() {
@@ -293,10 +307,18 @@ void tilt_colors() {
   float distance = convert_xy_to_magnitude(mean_ax, mean_ay);
 
   int distance_saturation = int(255 * 3 * distance);
-  int distance_value = int(150 * distance);
+  int distance_value = int(200 * distance);
+  int distance_value_brighter = int(400 * distance);
   uint32_t base_color = leds_rgb.ColorHSV(int(65536 * direction), constrain(distance_saturation, 0, 255), constrain(distance_value, 0, 175));
-  for (int i = 0; i < led_count_rgb; i++) {
-    leds_rgb.setPixelColor(i, leds_rgb.gamma32(base_color));
+  uint32_t brighter = leds_rgb.ColorHSV(int(65536 * direction), constrain(distance_saturation, 0, 255), constrain(distance_value_brighter, 0, 255));
+  for (int i = 0; i < led_count_rgb; i++) { 
+    // make top leds brighter to compensate for fewer
+    if (which_rgb_strip(i) == strip_rgb_upper) {
+      leds_rgb.setPixelColor(i, leds_rgb.gamma32(brighter));
+    } else {
+      leds_rgb.setPixelColor(i, leds_rgb.gamma32(base_color));
+    }
+    
   }
   leds_rgb.show();
   // for (int i = 0; i < led_count_rgbw; i++) {
@@ -351,7 +373,7 @@ void direction_test_colors() {
   led = convert_angle_to_led(direction, strip_rgb_upper);
   int led_active_upper = int(floor(led));
 
-  Serial.println(led);
+  // Serial.println(led);
   // Serial.println(led_active_inner);
   // Serial.println(led_active_outer);
   // Serial.println(led_active_upper);
@@ -365,15 +387,16 @@ void direction_test_colors() {
   }
 
   leds_rgb.show();
-  leds_rgbw.show();
+  // leds_rgbw.show();
   leds_side.show();
 }
 
 void loop() {
   // Serial.println(F("Loop start"));
-  // if (loop_count % 10 == 0) {
-  //   read_power();
-  // }
+  if (loop_count % 100 == 0) {
+    Serial.println(F("Loop start"));
+    read_power();
+  }
 
   read_sensors();
   // print_sensor_values();
@@ -381,8 +404,6 @@ void loop() {
   sleep_colors();
   tilt_colors();
 
-  Serial.println();
-  // delay(5);
 
   loop_count++;
 }
