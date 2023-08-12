@@ -1,6 +1,8 @@
 #include "Adafruit_VL53L1X.h"
 #include "Adafruit_NeoPixel.h"
 #include "Arduino_LSM6DS3.h"
+#include <Adafruit_LIS3MDL.h>
+#include <Adafruit_Sensor.h>
 
 #define PIN_led_rgb 9
 #define PIN_led_side 8
@@ -31,14 +33,15 @@ int16_t distance[3];
 #define led_count_rgbw 16
 #define led_count_rgb_single 24
 #define led_count_upper 12
-#define led_count_rgb 60
-#define led_count_side 12
+#define led_count_rgb 72
+#define led_count_side 24
 #define strip_rgbw 0  // used for identity in functions
 #define strip_side 1
 #define strip_rgb_inner 2
 #define strip_rgb_outer 3
 #define strip_rgb_upper 4
 #define strip_rgb_lower 5
+#define BRIGHTNESS 255
 
 Adafruit_NeoPixel leds_rgb(led_count_rgb, 9, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel leds_side(led_count_side, 8, NEO_GRB + NEO_KHZ800);
@@ -64,6 +67,10 @@ float buffer_sum_ax = 0;
 float buffer_sum_ay = 0;
 int sample_count = 0;
 
+Adafruit_LIS3MDL magnetometer;
+bool magnetometer_found = false;
+sensors_event_t event;
+
 void setup() {
   randomSeed(analogRead(PIN_battery_measure));
 
@@ -76,7 +83,26 @@ void setup() {
   Wire.begin(12, 11);
   Serial.println(F("Wire is started"));
   delay(500);
-  
+
+  magnetometer_found = magnetometer.begin_I2C(0x1C, &Wire);
+  if(magnetometer_found)
+  {
+    Serial.println("LIS3MDL Found!");
+    magnetometer.setPerformanceMode(LIS3MDL_MEDIUMMODE);
+    magnetometer.setOperationMode(LIS3MDL_CONTINUOUSMODE);
+    magnetometer.setDataRate(LIS3MDL_DATARATE_40_HZ);
+    magnetometer.setRange(LIS3MDL_RANGE_4_GAUSS);
+    magnetometer.setIntThreshold(500);
+    magnetometer.setIntThreshold(500);
+    magnetometer.configInterrupt(false, false, true, // enable z axis
+                            true, // polarity
+                            false, // don't latch
+                            true); // enabled!
+  }else
+  {
+    Serial.println("LIS3MDL NOT Found!");
+  }
+
   // accel start
   while (!IMU.begin()) {
     Serial.println("Failed to initialize IMU!");
@@ -88,14 +114,17 @@ void setup() {
   // LED start
   sleep_oscillation_period += random(2000);
   leds_rgb.begin();
-  leds_rgb.show(); 
+  leds_rgb.setBrightness(BRIGHTNESS);
+  leds_rgb.show();
   leds_side.begin();
+  leds_side.setBrightness(BRIGHTNESS);
   leds_side.show();
   leds_rgbw.begin();
+  leds_rgbw.setBrightness(BRIGHTNESS);
   leds_rgbw.show();
   // enable LED power
   pinMode(PIN_led_enable, OUTPUT);
-  digitalWrite(PIN_led_enable, HIGH);  
+  digitalWrite(PIN_led_enable, HIGH);
 
 
   // lidar start
@@ -167,6 +196,11 @@ void read_sensors() {
       }
     }
   }
+
+  if (magnetometer_found)
+  {
+    magnetometer.getEvent(&event);
+  }
 }
 
 float convert_xy_to_angle(float x, float y) {
@@ -237,7 +271,12 @@ void print_sensor_values() {
       Serial.print(", ");
     }
   }
-  Serial.println();
+  /* Display the results (magnetic field is measured in uTesla) */
+  Serial.print("\tX: "); Serial.print(event.magnetic.x);
+  Serial.print(" \tY: "); Serial.print(event.magnetic.y);
+  Serial.print(" \tZ: "); Serial.print(event.magnetic.z);
+  Serial.println(" uTesla ");
+  // Serial.println();
 }
 
 void boot_animation() {
@@ -311,14 +350,12 @@ void tilt_colors() {
   int distance_value_brighter = int(400 * distance);
   uint32_t base_color = leds_rgb.ColorHSV(int(65536 * direction), constrain(distance_saturation, 0, 255), constrain(distance_value, 0, 175));
   uint32_t brighter = leds_rgb.ColorHSV(int(65536 * direction), constrain(distance_saturation, 0, 255), constrain(distance_value_brighter, 0, 255));
-  for (int i = 0; i < led_count_rgb; i++) { 
+  for (int i = 0; i < led_count_rgb; i++) {
     // make top leds brighter to compensate for fewer
-    if (which_rgb_strip(i) == strip_rgb_upper) {
-      leds_rgb.setPixelColor(i, leds_rgb.gamma32(brighter));
-    } else {
+
       leds_rgb.setPixelColor(i, leds_rgb.gamma32(base_color));
-    }
-    
+
+
   }
   leds_rgb.show();
   // for (int i = 0; i < led_count_rgbw; i++) {
