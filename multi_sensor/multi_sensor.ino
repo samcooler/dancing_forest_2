@@ -67,6 +67,7 @@ float buffer_sum_ax = 0;
 float buffer_sum_ay = 0;
 int sample_count = 0;
 
+#define USE_MAGNETOMETER false
 Adafruit_LIS3MDL magnetometer;
 bool magnetometer_found = false;
 sensors_event_t event;
@@ -84,24 +85,28 @@ void setup() {
   Serial.println(F("Wire is started"));
   delay(500);
 
-  magnetometer_found = magnetometer.begin_I2C(0x1C, &Wire);
-  if(magnetometer_found)
+  if(USE_MAGNETOMETER)
   {
-    Serial.println("LIS3MDL Found!");
-    magnetometer.setPerformanceMode(LIS3MDL_MEDIUMMODE);
-    magnetometer.setOperationMode(LIS3MDL_CONTINUOUSMODE);
-    magnetometer.setDataRate(LIS3MDL_DATARATE_40_HZ);
-    magnetometer.setRange(LIS3MDL_RANGE_4_GAUSS);
-    magnetometer.setIntThreshold(500);
-    magnetometer.setIntThreshold(500);
-    magnetometer.configInterrupt(false, false, true, // enable z axis
-                            true, // polarity
-                            false, // don't latch
-                            true); // enabled!
-  }else
-  {
-    Serial.println("LIS3MDL NOT Found!");
+    magnetometer_found = magnetometer.begin_I2C(0x1C, &Wire);
+    if(magnetometer_found)
+    {
+      Serial.println("LIS3MDL Found!");
+      magnetometer.setPerformanceMode(LIS3MDL_MEDIUMMODE);
+      magnetometer.setOperationMode(LIS3MDL_CONTINUOUSMODE);
+      magnetometer.setDataRate(LIS3MDL_DATARATE_40_HZ);
+      magnetometer.setRange(LIS3MDL_RANGE_4_GAUSS);
+      magnetometer.setIntThreshold(500);
+      magnetometer.setIntThreshold(500);
+      magnetometer.configInterrupt(false, false, true, // enable z axis
+                              true, // polarity
+                              false, // don't latch
+                              true); // enabled!
+    }else
+    {
+      Serial.println("LIS3MDL NOT Found!");
+    }
   }
+
 
   // accel start
   while (!IMU.begin()) {
