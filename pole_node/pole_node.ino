@@ -6,12 +6,12 @@ This example may be copied under the terms of the MIT license, see the LICENSE f
 #include <ArtnetWifi.h>
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
-#include "Adafruit_VL53L0X.h"
+ #include "Adafruit_VL53L0X.h"
 #include <WiFi.h>
 
 //Wifi settings
-const char* ssid = "Athenaeum Residents";
-const char* password = "boots on mars";
+const char* ssid = "Athenaeum";
+const char* password = "community";
 
 // Neopixel settings
 const int numLeds = 30; // change for your setup
@@ -20,7 +20,7 @@ const byte dataPin = 0;
 Adafruit_NeoPixel leds = Adafruit_NeoPixel(numLeds, dataPin, NEO_GRB + NEO_KHZ800);
 
 // sensor settings
-const int num_sensors = 6;
+const int num_sensors = 0;
 const int pin_address = 1;
 int node_address = 0;
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
@@ -133,24 +133,26 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
   }
 }
 
-void setup()
-{
-  Serial.begin(115200);
+void setup() {
+    Serial.begin(115200);
 
-  // which node am I?
-  pinMode(pin_address, INPUT);
-  node_address = digitalRead(pin_address);
-  Serial.print("Node address: ");
-  Serial.println(node_address);
+    // which node am I?
+    pinMode(pin_address, INPUT);
+    node_address = digitalRead(pin_address);
+    Serial.print("Node address: ");
+    Serial.println(node_address);
 
-  // setup sensors
-  Wire.begin(2, 3);
-  Serial.println("Adafruit VL53L0X test");
-  if (!lox.begin()) {
-    Serial.println(F("Failed to boot VL53L0X"));
-    while(1);
-  }
-
+    // setup sensors
+    if (num_sensors > 0) {
+        Wire.begin(2, 3);
+        Serial.println("Adafruit VL53L0X test");
+        if (!lox.begin()) {
+            Serial.println(F("Failed to boot VL53L0X"));
+            while (1);
+        }
+    } else {
+        Serial.println("No sensors");
+    }
 
   ConnectWifi();
   artnet.begin(host);
