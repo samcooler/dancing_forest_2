@@ -377,9 +377,9 @@ void tilt_colors() {
   uint32_t base_color = leds_rgb.ColorHSV(int(65536 * direction), constrain(distance_saturation, 0, 255), constrain(distance_value, 0, 175));
   // uint32_t brighter = leds_rgb.ColorHSV(int(65536 * direction), constrain(distance_saturation, 0, 255), constrain(distance_value_brighter, 0, 255));
 
-  Serial.print(distance_value);
-  Serial.print(' ');
-  Serial.println(main_luminance);
+  // Serial.print(distance_value);
+  // Serial.print(' ');
+  // Serial.println(main_luminance);
   for (int i = 0; i < led_count_rgb; i++) {
       leds_rgb.setPixelColor(i, leds_rgb.gamma32(base_color));
   }
