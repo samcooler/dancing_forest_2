@@ -47,6 +47,7 @@ Adafruit_NeoPixel leds_rgb(led_count_rgb, 9, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel leds_side(led_count_side, 8, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel leds_rgbw(led_count_rgbw, 7, NEO_GRBW + NEO_KHZ800);
 int sleep_luminance = 0;
+int main_luminance = 1000;
 const int sleep_start = 6000;
 const int sleep_fully = 20000;
 float sleep_oscillation_period = 1000;
@@ -57,7 +58,7 @@ const int sensor_threshold = 10;
 // accel setup
 float ax, ay, az, gx, gy, gz;
 uint32_t last_motion_time;
-const int BUFFER_SIZE = 10;  // Set the buffer size for smoothing
+const int BUFFER_SIZE = 20;  // Set the buffer size for acceleration smoothing
 
 float buffer_ax[BUFFER_SIZE] = { 0 };
 float buffer_ay[BUFFER_SIZE] = { 0 };
@@ -317,21 +318,36 @@ void sleep_colors() {
   if (time_since_motion > sleep_fully) {
     // sleep mode
     sleep_luminance = int(sin((time_since_motion - sleep_fully) / sleep_oscillation_period) * sleep_oscillation_magnitude + sleep_luminance_baseline);
+    main_luminance = 0;
   } else if (time_since_motion > sleep_start and time_since_motion <= sleep_fully) {
     // fade into sleep over 4 seconds, after 1 second of inactivity
     sleep_luminance = int((time_since_motion - sleep_start) * sleep_luminance_baseline / (sleep_fully - sleep_start));
+    main_luminance -= 1;
+    if (main_luminance < 0) { main_luminance = 0;}
 
   } else if (time_since_motion < 1000 and sleep_luminance > 0) {
     // fade out of sleep slowly
     if(loop_count % 3 == 0) {
       sleep_luminance -= 1;
     }
+    main_luminance += 5;
+    if( main_luminance > 1000) {
+      main_luminance = 1000;
+    }    
   } else {
     sleep_luminance = 0;
+    main_luminance += 5;
+    if( main_luminance > 1000) {
+      main_luminance = 1000;
+    }
   }
   // Serial.println(sleep_luminance);
+  int sleep_luminance_out = sleep_luminance;
   for (int i = 0; i < led_count_rgbw; i++) {
-    leds_rgbw.setPixelColor(i,leds_rgbw.gamma32(leds_rgbw.Color(0,0,0,sleep_luminance)));
+    // if(random(100) <= 1) {
+      // sleep_luminance_out = constrain(sleep_luminance_out + 100, 0, 255);
+    // }
+    leds_rgbw.setPixelColor(i,leds_rgbw.gamma32(leds_rgbw.Color(0,0,0,sleep_luminance_out)));
   }
   leds_rgbw.show();
 }
@@ -348,19 +364,24 @@ void tilt_colors() {
   float mean_ax = calculate_smoothed_mean(ax, buffer_ax, buffer_index_ax, buffer_sum_ax);
   float mean_ay = calculate_smoothed_mean(ay, buffer_ay, buffer_index_ay, buffer_sum_ay);
   float direction = convert_xy_to_angle(mean_ax, mean_ay);
+  direction *= 2;
+  if(direction > 1.0) {
+    direction -= 1.0;
+  }
+  // Serial.println(direction);
   float distance = convert_xy_to_magnitude(mean_ax, mean_ay);
 
   int distance_saturation = int(255 * 3 * distance);
-  int distance_value = int(200 * distance);
-  int distance_value_brighter = int(400 * distance);
+  int distance_value = int(200 * distance * main_luminance / 1000);
+  // int distance_value_brighter = int(400 * distance);
   uint32_t base_color = leds_rgb.ColorHSV(int(65536 * direction), constrain(distance_saturation, 0, 255), constrain(distance_value, 0, 175));
-  uint32_t brighter = leds_rgb.ColorHSV(int(65536 * direction), constrain(distance_saturation, 0, 255), constrain(distance_value_brighter, 0, 255));
+  // uint32_t brighter = leds_rgb.ColorHSV(int(65536 * direction), constrain(distance_saturation, 0, 255), constrain(distance_value_brighter, 0, 255));
+
+  Serial.print(distance_value);
+  Serial.print(' ');
+  Serial.println(main_luminance);
   for (int i = 0; i < led_count_rgb; i++) {
-    // make top leds brighter to compensate for fewer
-
       leds_rgb.setPixelColor(i, leds_rgb.gamma32(base_color));
-
-
   }
   leds_rgb.show();
   // for (int i = 0; i < led_count_rgbw; i++) {
@@ -370,7 +391,7 @@ void tilt_colors() {
   for (int i = 0; i < led_count_side; i++) {
     leds_side.setPixelColor(i, leds_side.gamma32(base_color));
   }
-  leds_side.show();
+  // leds_side.show();
   // Serial.println(direction);
   // Serial.println(distance);
 }
