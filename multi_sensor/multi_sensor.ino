@@ -382,16 +382,16 @@ void tilt_colors() {
   // Serial.print(distance_value);
   // Serial.print(' ');
   // Serial.println(main_luminance);
-  
+
   for (int i = 0; i < led_count_rgb; i++) {
-      leds_rgb.setPixelColor(i, leds_rgb.gamma32(base_color));
+    leds_rgb.setPixelColor(i, leds_rgb.gamma32(base_color));
   }
   leds_rgb.show();
 
-  for (int i = 0; i < led_count_side; i++) {
-    leds_side.setPixelColor(i, leds_side.gamma32(base_color));
-  }
-  leds_side.show();
+  // for (int i = 0; i < led_count_side; i++) {
+  //   leds_side.setPixelColor(i, leds_side.gamma32(base_color));
+  // }
+  // leds_side.show();
 
 }
 
@@ -450,18 +450,18 @@ void direction_test_colors() {
 
   leds_rgb.show();
   // leds_rgbw.show();
-  leds_side.show();
+  // leds_side.show();
 }
 
 void loop() {
   // Serial.println(F("Loop start"));
   if (loop_count % 100 == 0) {
-    Serial.println(F("Loop start"));
+    Serial.println(F("Loop 100th start"));
     read_power();
   }
 
   read_sensors();
-  // print_sensor_values();
+  print_sensor_values();
   // simple_led_colors();
   sleep_colors();
   tilt_colors();
