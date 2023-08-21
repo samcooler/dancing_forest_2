@@ -32,7 +32,7 @@ int16_t distance[3];
 // setup LEDs
 #define led_count_rgbw 16
 #define led_count_rgb_single 24
-#define led_count_upper 12
+#define led_count_upper 24
 #define led_count_rgb 72
 #define led_count_side 24
 #define strip_rgbw 0  // used for identity in functions
@@ -48,7 +48,7 @@ Adafruit_NeoPixel leds_side(led_count_side, 8, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel leds_rgbw(led_count_rgbw, 7, NEO_GRBW + NEO_KHZ800);
 int sleep_luminance = 0;
 int main_luminance = 1000;
-const int sleep_start = 6000;
+const int sleep_start = 12000;
 const int sleep_fully = 20000;
 float sleep_oscillation_period = 1000;
 const float sleep_luminance_baseline = 100;
@@ -377,23 +377,22 @@ void tilt_colors() {
   uint32_t base_color = leds_rgb.ColorHSV(int(65536 * direction), constrain(distance_saturation, 0, 255), constrain(distance_value, 0, 175));
   // uint32_t brighter = leds_rgb.ColorHSV(int(65536 * direction), constrain(distance_saturation, 0, 255), constrain(distance_value_brighter, 0, 255));
 
+  // Serial.println(direction);
+  // Serial.println(distance);
   // Serial.print(distance_value);
   // Serial.print(' ');
   // Serial.println(main_luminance);
+  
   for (int i = 0; i < led_count_rgb; i++) {
       leds_rgb.setPixelColor(i, leds_rgb.gamma32(base_color));
   }
   leds_rgb.show();
-  // for (int i = 0; i < led_count_rgbw; i++) {
-  //   leds_rgbw.setPixelColor(i, leds_rgbw.gamma32(base_color));
-  // }
-  // leds_rgbw.show();
+
   for (int i = 0; i < led_count_side; i++) {
     leds_side.setPixelColor(i, leds_side.gamma32(base_color));
   }
-  // leds_side.show();
-  // Serial.println(direction);
-  // Serial.println(distance);
+  leds_side.show();
+
 }
 
 void direction_test_colors() {
